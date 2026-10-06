@@ -28,9 +28,22 @@ type StartupSubmitContext = {
 	showStatus: (message: string) => void;
 };
 
+type ClearCommandContext = {
+	clearStatusIndicator: () => void;
+	runtimeHost: {
+		newSession: (options?: {
+			setup?: (sessionManager: { appendSessionInfo: (name: string) => void }) => Promise<void>;
+		}) => Promise<{ cancelled: boolean }>;
+	};
+	chatContainer: { addChild: (child: unknown) => void };
+	ui: { requestRender: () => void };
+	handleFatalRuntimeError: (message: string, error: unknown) => Promise<void>;
+};
+
 type InteractiveModePrivate = {
 	handleStartupSubmit(this: StartupSubmitContext, text: string): void;
 	setupEditorSubmitHandler(this: SubmitContext): void;
+	handleClearCommand(this: ClearCommandContext, name?: string): Promise<void>;
 	getUserInput(this: InputContext): Promise<string>;
 };
 
@@ -76,6 +89,42 @@ describe("InteractiveMode startup input", () => {
 		expect(context.pendingUserInputs).toEqual(["early prompt"]);
 		expect(context.flushPendingBashComponents).toHaveBeenCalledTimes(1);
 		expect(context.editor.addToHistory).toHaveBeenCalledWith("early prompt");
+	});
+
+	it("passes a trimmed name from /new <name> to the new-session handler", async () => {
+		const context = Object.assign(createSubmitContext(), {
+			handleClearCommand: vi.fn(async () => {}),
+		});
+
+		interactiveModePrototype.setupEditorSubmitHandler.call(context);
+		await context.defaultEditor.onSubmit?.("/new  new-session-name  ");
+
+		expect(context.handleClearCommand).toHaveBeenCalledWith("new-session-name");
+		expect(context.editor.setText).toHaveBeenCalledWith("");
+	});
+
+	it("names a new session from /new <name>", async () => {
+		const appendSessionInfo = vi.fn();
+		const newSession = vi.fn(
+			async (options?: {
+				setup?: (sessionManager: { appendSessionInfo: (name: string) => void }) => Promise<void>;
+			}) => {
+				await options?.setup?.({ appendSessionInfo });
+				return { cancelled: false };
+			},
+		);
+		const context: ClearCommandContext = {
+			clearStatusIndicator: vi.fn(),
+			runtimeHost: { newSession },
+			chatContainer: { addChild: vi.fn() },
+			ui: { requestRender: vi.fn() },
+			handleFatalRuntimeError: vi.fn(async () => {}),
+		};
+
+		// #6726: /new <name> should persist the name while creating the session.
+		await interactiveModePrototype.handleClearCommand.call(context, "new-session-name");
+
+		expect(appendSessionInfo).toHaveBeenCalledWith("new-session-name");
 	});
 
 	it("returns queued startup input before installing a new input callback", async () => {

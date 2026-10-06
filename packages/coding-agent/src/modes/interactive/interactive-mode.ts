@@ -3281,9 +3281,10 @@ export class InteractiveMode {
 				this.editor.setText("");
 				return;
 			}
-			if (text === "/new") {
+			if (text === "/new" || text.startsWith("/new ")) {
+				const name = text.startsWith("/new ") ? text.slice(5).trim() : undefined;
 				this.editor.setText("");
-				await this.handleClearCommand();
+				await this.handleClearCommand(name || undefined);
 				return;
 			}
 			if (text === "/compact" || text.startsWith("/compact ")) {
@@ -6886,10 +6887,18 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
-	private async handleClearCommand(): Promise<void> {
+	private async handleClearCommand(name?: string): Promise<void> {
 		this.clearStatusIndicator();
 		try {
-			const result = await this.runtimeHost.newSession();
+			const result = await this.runtimeHost.newSession(
+				name
+					? {
+							setup: async (sessionManager) => {
+								sessionManager.appendSessionInfo(name);
+							},
+						}
+					: undefined,
+			);
 			if (result.cancelled) {
 				return;
 			}
