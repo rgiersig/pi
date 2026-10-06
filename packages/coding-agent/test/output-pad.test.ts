@@ -1,6 +1,7 @@
-import type { Component, TUI } from "@earendil-works/pi-tui";
+import { type Component, TuiMainScreen } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { VirtualTerminal } from "../../tui/test/virtual-terminal.ts";
 import type { ToolDefinition } from "../src/core/extensions/types.ts";
 import { createEditToolDefinition } from "../src/core/tools/edit.ts";
 import { BashExecutionComponent } from "../src/modes/interactive/components/bash-execution.ts";
@@ -9,12 +10,7 @@ import { ToolExecutionComponent } from "../src/modes/interactive/components/tool
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
-const ui = {
-	terminal: { columns: 80, rows: 24 },
-	addInterval: () => ({ dispose: () => {} }),
-	removeInterval: () => {},
-	requestRender: () => {},
-} as unknown as TUI;
+const ui = new TuiMainScreen(new VirtualTerminal(80, 24));
 
 const tool: ToolDefinition = {
 	name: "custom_tool",
@@ -82,6 +78,10 @@ const components: Array<{ name: string; create: (outputPad: number) => OutputPad
 describe("outputPad", () => {
 	beforeAll(() => {
 		initTheme("dark");
+	});
+
+	afterAll(() => {
+		ui.stop();
 	});
 
 	test.each(components)("$name pads every text line after setOutputPad(1)", ({ create }) => {
